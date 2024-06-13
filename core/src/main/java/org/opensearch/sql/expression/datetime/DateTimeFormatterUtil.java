@@ -12,6 +12,7 @@ import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.Year;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
@@ -327,7 +328,7 @@ class DateTimeFormatterUtil {
 
     int year =
         taWithMissingFields.isSupported(ChronoField.YEAR)
-            ? taWithMissingFields.get(ChronoField.YEAR)
+            ? checkYearDigits(taWithMissingFields.get(ChronoField.YEAR))
             : 2000;
 
     int month =
@@ -380,5 +381,30 @@ class DateTimeFormatterUtil {
       return SUFFIX_SPECIAL_TH;
     }
     return SUFFIX_CONVERTER.getOrDefault(val % 10, SUFFIX_SPECIAL_TH);
+  }
+
+  private static int checkYearDigits(int yearDigits) {
+    return convertTwoDigitYearToFour(yearDigits, Year.now().getValue());
+  }
+
+  /**
+   * Converts a two digit year to a four digit year if needed. 2 digits years are mapped to a range
+   * of the current year minus 66 to current year plus 33. E.g. if the current year is 2024, then
+   * the range is 1958 to 2057
+   */
+  public static int convertTwoDigitYearToFour(int twoDigitYear, int currentYear) {
+    if (twoDigitYear < 0 || twoDigitYear > 99) {
+      // not a valid two-digit year
+      return twoDigitYear;
+    }
+    int baseYear = currentYear - 66;
+    int baseCentury = baseYear / 100 * 100;
+    int fullYear = baseCentury + twoDigitYear;
+
+    // Adjust the full year if it falls outside the range
+    if (fullYear < baseYear) {
+      fullYear += 100;
+    }
+    return fullYear;
   }
 }

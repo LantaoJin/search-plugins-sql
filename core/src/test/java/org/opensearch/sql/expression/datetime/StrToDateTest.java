@@ -53,6 +53,12 @@ class StrToDateTest extends ExpressionTestBase {
             "%Y,%m,%d,%h,%i",
             new ExprTimestampValue("2000-01-01 10:11:00"),
             TIMESTAMP),
+        Arguments.of(
+            "05-Jan-13", "%d-%b-%y", new ExprTimestampValue("2013-01-05 00:00:00"), TIMESTAMP),
+        Arguments.of(
+            "05-Jan-00", "%d-%b-%y", new ExprTimestampValue("2000-01-05 00:00:00"), TIMESTAMP),
+        Arguments.of(
+            "05-Jan-99", "%d-%b-%y", new ExprTimestampValue("1999-01-05 00:00:00"), TIMESTAMP),
 
         // Invalid Arguments (should return null)
         Arguments.of("a09:30:17", "a%h:%i:%s", ExprNullValue.of(), UNDEFINED),
@@ -164,6 +170,40 @@ class StrToDateTest extends ExpressionTestBase {
         LocalDateTime.ofInstant(eval(strToDateExpr).timestampValue(), ZoneOffset.UTC);
 
     assertEquals(getExpectedTimeResult(HOURS, MINUTES, SECONDS), strToDateResult);
+  }
+
+  @Test
+  public void test_convert_two_digits_year_to_four_digits_year() {
+    int currentYear = 2024;
+    assertEquals(2024, DateTimeFormatterUtil.convertTwoDigitYearToFour(24, currentYear));
+    assertEquals(2000, DateTimeFormatterUtil.convertTwoDigitYearToFour(0, currentYear));
+    assertEquals(1999, DateTimeFormatterUtil.convertTwoDigitYearToFour(99, currentYear));
+    assertEquals(2056, DateTimeFormatterUtil.convertTwoDigitYearToFour(56, currentYear));
+    assertEquals(2057, DateTimeFormatterUtil.convertTwoDigitYearToFour(57, currentYear));
+    assertEquals(1958, DateTimeFormatterUtil.convertTwoDigitYearToFour(58, currentYear));
+    assertEquals(1959, DateTimeFormatterUtil.convertTwoDigitYearToFour(59, currentYear));
+    assertEquals(100, DateTimeFormatterUtil.convertTwoDigitYearToFour(100, currentYear));
+    assertEquals(-1, DateTimeFormatterUtil.convertTwoDigitYearToFour(-1, currentYear));
+    currentYear = 3024;
+    assertEquals(3024, DateTimeFormatterUtil.convertTwoDigitYearToFour(24, currentYear));
+    assertEquals(3000, DateTimeFormatterUtil.convertTwoDigitYearToFour(0, currentYear));
+    assertEquals(2999, DateTimeFormatterUtil.convertTwoDigitYearToFour(99, currentYear));
+    assertEquals(3056, DateTimeFormatterUtil.convertTwoDigitYearToFour(56, currentYear));
+    assertEquals(3057, DateTimeFormatterUtil.convertTwoDigitYearToFour(57, currentYear));
+    assertEquals(2958, DateTimeFormatterUtil.convertTwoDigitYearToFour(58, currentYear));
+    assertEquals(2959, DateTimeFormatterUtil.convertTwoDigitYearToFour(59, currentYear));
+    assertEquals(100, DateTimeFormatterUtil.convertTwoDigitYearToFour(100, currentYear));
+    assertEquals(-1, DateTimeFormatterUtil.convertTwoDigitYearToFour(-1, currentYear));
+    currentYear = 1024; // for testing only, the currentYear is not possible to be 1024.
+    assertEquals(1024, DateTimeFormatterUtil.convertTwoDigitYearToFour(24, currentYear));
+    assertEquals(1000, DateTimeFormatterUtil.convertTwoDigitYearToFour(0, currentYear));
+    assertEquals(999, DateTimeFormatterUtil.convertTwoDigitYearToFour(99, currentYear));
+    assertEquals(1056, DateTimeFormatterUtil.convertTwoDigitYearToFour(56, currentYear));
+    assertEquals(1057, DateTimeFormatterUtil.convertTwoDigitYearToFour(57, currentYear));
+    assertEquals(958, DateTimeFormatterUtil.convertTwoDigitYearToFour(58, currentYear));
+    assertEquals(959, DateTimeFormatterUtil.convertTwoDigitYearToFour(59, currentYear));
+    assertEquals(100, DateTimeFormatterUtil.convertTwoDigitYearToFour(100, currentYear));
+    assertEquals(-1, DateTimeFormatterUtil.convertTwoDigitYearToFour(-1, currentYear));
   }
 
   private ExprValue eval(Expression expression) {

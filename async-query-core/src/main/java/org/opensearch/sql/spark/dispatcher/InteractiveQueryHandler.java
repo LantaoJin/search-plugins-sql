@@ -16,7 +16,8 @@ import lombok.RequiredArgsConstructor;
 import org.json.JSONObject;
 import org.opensearch.sql.datasource.model.DataSourceMetadata;
 import org.opensearch.sql.spark.asyncquery.model.AsyncQueryJobMetadata;
-import org.opensearch.sql.spark.asyncquery.model.SparkSubmitParameters;
+import org.opensearch.sql.spark.asyncquery.model.AsyncQueryRequestContext;
+import org.opensearch.sql.spark.asyncquery.model.QueryState;
 import org.opensearch.sql.spark.dispatcher.model.DispatchQueryContext;
 import org.opensearch.sql.spark.dispatcher.model.DispatchQueryRequest;
 import org.opensearch.sql.spark.dispatcher.model.DispatchQueryResponse;
@@ -32,6 +33,7 @@ import org.opensearch.sql.spark.leasemanager.LeaseManager;
 import org.opensearch.sql.spark.leasemanager.model.LeaseRequest;
 import org.opensearch.sql.spark.metrics.EmrMetrics;
 import org.opensearch.sql.spark.metrics.MetricsService;
+import org.opensearch.sql.spark.parameter.SparkSubmitParametersBuilderProvider;
 import org.opensearch.sql.spark.response.JobExecutionResponseReader;
 
 /**
@@ -46,23 +48,29 @@ public class InteractiveQueryHandler extends AsyncQueryHandler {
   private final JobExecutionResponseReader jobExecutionResponseReader;
   private final LeaseManager leaseManager;
   private final MetricsService metricsService;
+  protected final SparkSubmitParametersBuilderProvider sparkSubmitParametersBuilderProvider;
 
   @Override
-  protected JSONObject getResponseFromResultIndex(AsyncQueryJobMetadata asyncQueryJobMetadata) {
+  protected JSONObject getResponseFromResultIndex(
+      AsyncQueryJobMetadata asyncQueryJobMetadata,
+      AsyncQueryRequestContext asyncQueryRequestContext) {
     String queryId = asyncQueryJobMetadata.getQueryId();
     return jobExecutionResponseReader.getResultWithQueryId(
-        queryId, asyncQueryJobMetadata.getResultIndex());
+        queryId, asyncQueryJobMetadata.getResultIndex(), asyncQueryRequestContext);
   }
 
   @Override
-  protected JSONObject getResponseFromExecutor(AsyncQueryJobMetadata asyncQueryJobMetadata) {
+  protected JSONObject getResponseFromExecutor(
+      AsyncQueryJobMetadata asyncQueryJobMetadata,
+      AsyncQueryRequestContext asyncQueryRequestContext) {
     JSONObject result = new JSONObject();
     String queryId = asyncQueryJobMetadata.getQueryId();
     Statement statement =
         getStatementByQueryId(
             asyncQueryJobMetadata.getSessionId(),
             queryId,
-            asyncQueryJobMetadata.getDatasourceName());
+            asyncQueryJobMetadata.getDatasourceName(),
+            asyncQueryRequestContext);
     StatementState statementState = statement.getStatementState();
     result.put(STATUS_FIELD, statementState.getState());
     result.put(ERROR_FIELD, Optional.of(statement.getStatementModel().getError()).orElse(""));
@@ -70,12 +78,15 @@ public class InteractiveQueryHandler extends AsyncQueryHandler {
   }
 
   @Override
-  public String cancelJob(AsyncQueryJobMetadata asyncQueryJobMetadata) {
+  public String cancelJob(
+      AsyncQueryJobMetadata asyncQueryJobMetadata,
+      AsyncQueryRequestContext asyncQueryRequestContext) {
     String queryId = asyncQueryJobMetadata.getQueryId();
     getStatementByQueryId(
             asyncQueryJobMetadata.getSessionId(),
             queryId,
-            asyncQueryJobMetadata.getDatasourceName())
+            asyncQueryJobMetadata.getDatasourceName(),
+            asyncQueryRequestContext)
         .cancel();
     return queryId;
   }
@@ -112,12 +123,16 @@ public class InteractiveQueryHandler extends AsyncQueryHandler {
                   dispatchQueryRequest.getAccountId(),
                   dispatchQueryRequest.getApplicationId(),
                   dispatchQueryRequest.getExecutionRoleARN(),
-                  SparkSubmitParameters.builder()
+                  sparkSubmitParametersBuilderProvider
+                      .getSparkSubmitParametersBuilder()
                       .className(FLINT_SESSION_CLASS_NAME)
                       .clusterName(clusterName)
-                      .dataSource(dataSourceMetadata)
-                      .build()
-                      .acceptModifier(dispatchQueryRequest.getSparkSubmitParameterModifier()),
+                      .dataSource(
+                          dataSourceMetadata,
+                          dispatchQueryRequest,
+                          context.getAsyncQueryRequestContext())
+                      .acceptModifier(dispatchQueryRequest.getSparkSubmitParameterModifier())
+                      .acceptComposers(dispatchQueryRequest, context.getAsyncQueryRequestContext()),
                   tags,
                   dataSourceMetadata.getResultIndex(),
                   dataSourceMetadata.getName()),
@@ -137,15 +152,20 @@ public class InteractiveQueryHandler extends AsyncQueryHandler {
         .sessionId(session.getSessionId())
         .datasourceName(dataSourceMetadata.getName())
         .jobType(JobType.INTERACTIVE)
+        .status(QueryState.WAITING)
         .build();
   }
 
-  private Statement getStatementByQueryId(String sessionId, String queryId, String datasourceName) {
+  private Statement getStatementByQueryId(
+      String sessionId,
+      String queryId,
+      String datasourceName,
+      AsyncQueryRequestContext asyncQueryRequestContext) {
     Optional<Session> session = sessionManager.getSession(sessionId, datasourceName);
     if (session.isPresent()) {
       // todo, statementId == jobId if statement running in session.
       StatementId statementId = new StatementId(queryId);
-      Optional<Statement> statement = session.get().get(statementId);
+      Optional<Statement> statement = session.get().get(statementId, asyncQueryRequestContext);
       if (statement.isPresent()) {
         return statement.get();
       } else {

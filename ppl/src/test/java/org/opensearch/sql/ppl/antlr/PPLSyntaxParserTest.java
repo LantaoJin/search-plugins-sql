@@ -18,7 +18,7 @@ import org.opensearch.sql.common.antlr.SyntaxCheckException;
 
 public class PPLSyntaxParserTest {
 
-  @Rule public ExpectedException exceptionRule = ExpectedException.none();
+  @Rule public final ExpectedException exceptionRule = ExpectedException.none();
 
   @Test
   public void testSearchCommandShouldPass() {
@@ -455,5 +455,17 @@ public class PPLSyntaxParserTest {
                         block\
                             comment */ fields a,b /* block comment */ \
                     """));
+  }
+
+  @Test
+  public void testCanParseFillNullSameValue() {
+    assertNotNull(new PPLSyntaxParser().parse("SOURCE=test | fillnull with 0 in a"));
+    assertNotNull(new PPLSyntaxParser().parse("SOURCE=test | fillnull with 0 in a, b"));
+  }
+
+  @Test
+  public void testCanParseFillNullVariousValues() {
+    assertNotNull(new PPLSyntaxParser().parse("SOURCE=test | fillnull using a = 0"));
+    assertNotNull(new PPLSyntaxParser().parse("SOURCE=test | fillnull using a = 0, b = 1"));
   }
 }

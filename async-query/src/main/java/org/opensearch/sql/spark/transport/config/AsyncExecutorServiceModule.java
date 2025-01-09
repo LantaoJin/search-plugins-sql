@@ -7,6 +7,7 @@ package org.opensearch.sql.spark.transport.config;
 
 import static org.opensearch.sql.spark.execution.statestore.StateStore.ALL_DATASOURCE;
 
+import com.google.common.collect.ImmutableMap;
 import lombok.RequiredArgsConstructor;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.cluster.service.ClusterService;
@@ -15,6 +16,7 @@ import org.opensearch.common.inject.Provides;
 import org.opensearch.common.inject.Singleton;
 import org.opensearch.sql.common.setting.Settings;
 import org.opensearch.sql.datasource.DataSourceService;
+import org.opensearch.sql.datasource.model.DataSourceType;
 import org.opensearch.sql.legacy.metrics.GaugeMetric;
 import org.opensearch.sql.legacy.metrics.Metrics;
 import org.opensearch.sql.spark.asyncquery.AsyncQueryExecutorService;
@@ -23,6 +25,9 @@ import org.opensearch.sql.spark.asyncquery.AsyncQueryJobMetadataStorageService;
 import org.opensearch.sql.spark.asyncquery.OpenSearchAsyncQueryJobMetadataStorageService;
 import org.opensearch.sql.spark.client.EMRServerlessClientFactory;
 import org.opensearch.sql.spark.client.EMRServerlessClientFactoryImpl;
+import org.opensearch.sql.spark.config.OpenSearchAsyncQuerySchedulerConfigComposer;
+import org.opensearch.sql.spark.config.OpenSearchExtraParameterComposer;
+import org.opensearch.sql.spark.config.SparkExecutionEngineConfigClusterSettingLoader;
 import org.opensearch.sql.spark.config.SparkExecutionEngineConfigSupplier;
 import org.opensearch.sql.spark.config.SparkExecutionEngineConfigSupplierImpl;
 import org.opensearch.sql.spark.dispatcher.DatasourceEmbeddedQueryIdProvider;
@@ -53,8 +58,19 @@ import org.opensearch.sql.spark.flint.operation.FlintIndexOpFactory;
 import org.opensearch.sql.spark.leasemanager.DefaultLeaseManager;
 import org.opensearch.sql.spark.metrics.MetricsService;
 import org.opensearch.sql.spark.metrics.OpenSearchMetricsService;
+import org.opensearch.sql.spark.parameter.S3GlueDataSourceSparkParameterComposer;
+import org.opensearch.sql.spark.parameter.SparkParameterComposerCollection;
+import org.opensearch.sql.spark.parameter.SparkSubmitParametersBuilderProvider;
 import org.opensearch.sql.spark.response.JobExecutionResponseReader;
 import org.opensearch.sql.spark.response.OpenSearchJobExecutionResponseReader;
+import org.opensearch.sql.spark.scheduler.AsyncQueryScheduler;
+import org.opensearch.sql.spark.scheduler.OpenSearchAsyncQueryScheduler;
+import org.opensearch.sql.spark.validator.DefaultGrammarElementValidator;
+import org.opensearch.sql.spark.validator.GrammarElementValidatorProvider;
+import org.opensearch.sql.spark.validator.PPLQueryValidator;
+import org.opensearch.sql.spark.validator.S3GlueSQLGrammarElementValidator;
+import org.opensearch.sql.spark.validator.SQLQueryValidator;
+import org.opensearch.sql.spark.validator.SecurityLakeSQLGrammarElementValidator;
 
 @RequiredArgsConstructor
 public class AsyncExecutorServiceModule extends AbstractModule {
@@ -92,9 +108,16 @@ public class AsyncExecutorServiceModule extends AbstractModule {
       DataSourceService dataSourceService,
       SessionManager sessionManager,
       QueryHandlerFactory queryHandlerFactory,
-      QueryIdProvider queryIdProvider) {
+      QueryIdProvider queryIdProvider,
+      SQLQueryValidator sqlQueryValidator,
+      PPLQueryValidator pplQueryValidator) {
     return new SparkQueryDispatcher(
-        dataSourceService, sessionManager, queryHandlerFactory, queryIdProvider);
+        dataSourceService,
+        sessionManager,
+        queryHandlerFactory,
+        queryIdProvider,
+        sqlQueryValidator,
+        pplQueryValidator);
   }
 
   @Provides
@@ -111,7 +134,8 @@ public class AsyncExecutorServiceModule extends AbstractModule {
       IndexDMLResultStorageService indexDMLResultStorageService,
       FlintIndexOpFactory flintIndexOpFactory,
       EMRServerlessClientFactory emrServerlessClientFactory,
-      MetricsService metricsService) {
+      MetricsService metricsService,
+      SparkSubmitParametersBuilderProvider sparkSubmitParametersBuilderProvider) {
     return new QueryHandlerFactory(
         openSearchJobExecutionResponseReader,
         flintIndexMetadataReader,
@@ -120,7 +144,8 @@ public class AsyncExecutorServiceModule extends AbstractModule {
         indexDMLResultStorageService,
         flintIndexOpFactory,
         emrServerlessClientFactory,
-        metricsService);
+        metricsService,
+        sparkSubmitParametersBuilderProvider);
   }
 
   @Provides
@@ -128,12 +153,14 @@ public class AsyncExecutorServiceModule extends AbstractModule {
       FlintIndexStateModelService flintIndexStateModelService,
       FlintIndexClient flintIndexClient,
       FlintIndexMetadataServiceImpl flintIndexMetadataService,
-      EMRServerlessClientFactory emrServerlessClientFactory) {
+      EMRServerlessClientFactory emrServerlessClientFactory,
+      AsyncQueryScheduler asyncQueryScheduler) {
     return new FlintIndexOpFactory(
         flintIndexStateModelService,
         flintIndexClient,
         flintIndexMetadataService,
-        emrServerlessClientFactory);
+        emrServerlessClientFactory,
+        asyncQueryScheduler);
   }
 
   @Provides
@@ -145,6 +172,41 @@ public class AsyncExecutorServiceModule extends AbstractModule {
   public FlintIndexStateModelService flintIndexStateModelService(
       StateStore stateStore, FlintIndexStateModelXContentSerializer serializer) {
     return new OpenSearchFlintIndexStateModelService(stateStore, serializer);
+  }
+
+  @Provides
+  public SparkSubmitParametersBuilderProvider sparkSubmitParametersBuilderProvider(
+      Settings settings, SparkExecutionEngineConfigClusterSettingLoader clusterSettingLoader) {
+    SparkParameterComposerCollection collection = new SparkParameterComposerCollection();
+    collection.register(
+        DataSourceType.S3GLUE, new S3GlueDataSourceSparkParameterComposer(clusterSettingLoader));
+    collection.register(
+        DataSourceType.SECURITY_LAKE,
+        new S3GlueDataSourceSparkParameterComposer(clusterSettingLoader));
+    collection.register(new OpenSearchAsyncQuerySchedulerConfigComposer(settings));
+    collection.register(new OpenSearchExtraParameterComposer(clusterSettingLoader));
+    return new SparkSubmitParametersBuilderProvider(collection);
+  }
+
+  @Provides
+  public SQLQueryValidator sqlQueryValidator() {
+    GrammarElementValidatorProvider validatorProvider =
+        new GrammarElementValidatorProvider(
+            ImmutableMap.of(
+                DataSourceType.S3GLUE,
+                new S3GlueSQLGrammarElementValidator(),
+                DataSourceType.SECURITY_LAKE,
+                new SecurityLakeSQLGrammarElementValidator()),
+            new DefaultGrammarElementValidator());
+    return new SQLQueryValidator(validatorProvider);
+  }
+
+  @Provides
+  public PPLQueryValidator pplQueryValidator() {
+    GrammarElementValidatorProvider validatorProvider =
+        new GrammarElementValidatorProvider(
+            ImmutableMap.of(), new DefaultGrammarElementValidator());
+    return new PPLQueryValidator(validatorProvider);
   }
 
   @Provides
@@ -197,8 +259,15 @@ public class AsyncExecutorServiceModule extends AbstractModule {
   }
 
   @Provides
-  public SparkExecutionEngineConfigSupplier sparkExecutionEngineConfigSupplier(Settings settings) {
-    return new SparkExecutionEngineConfigSupplierImpl(settings);
+  public SparkExecutionEngineConfigSupplier sparkExecutionEngineConfigSupplier(
+      Settings settings, SparkExecutionEngineConfigClusterSettingLoader clusterSettingLoader) {
+    return new SparkExecutionEngineConfigSupplierImpl(settings, clusterSettingLoader);
+  }
+
+  @Provides
+  public SparkExecutionEngineConfigClusterSettingLoader
+      sparkExecutionEngineConfigClusterSettingLoader(Settings settings) {
+    return new SparkExecutionEngineConfigClusterSettingLoader(settings);
   }
 
   @Provides
@@ -215,6 +284,14 @@ public class AsyncExecutorServiceModule extends AbstractModule {
   @Provides
   public SessionConfigSupplier sessionConfigSupplier(Settings settings) {
     return new OpenSearchSessionConfigSupplier(settings);
+  }
+
+  @Provides
+  @Singleton
+  public AsyncQueryScheduler asyncQueryScheduler(NodeClient client, ClusterService clusterService) {
+    OpenSearchAsyncQueryScheduler scheduler =
+        new OpenSearchAsyncQueryScheduler(client, clusterService);
+    return scheduler;
   }
 
   private void registerStateStoreMetrics(StateStore stateStore) {

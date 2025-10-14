@@ -378,7 +378,7 @@ public class CalcitePPLExistsSubqueryIT extends PPLIntegTestCase {
   }
 
   @Test
-  public void testSubsearchMaxOutZero1() throws IOException {
+  public void testUncorrelatedSubsearchMaxOutZeroMeansUnlimited() throws IOException {
     setSubsearchMaxOut(0);
     JSONObject result =
         executeQuery(
@@ -390,53 +390,13 @@ public class CalcitePPLExistsSubqueryIT extends PPLIntegTestCase {
                     + "| sort  - salary"
                     + "| fields id, name, salary",
                 TEST_INDEX_WORKER, TEST_INDEX_WORK_INFORMATION));
-    verifyNumOfRows(result, 0);
-
-    result =
-        executeQuery(
-            String.format(
-                "source = %s"
-                    + "| where not exists ["
-                    + "    source = %s | where name = 'Tom'"
-                    + "  ]"
-                    + "| sort  - salary"
-                    + "| fields id, name, salary",
-                TEST_INDEX_WORKER, TEST_INDEX_WORK_INFORMATION));
     verifyNumOfRows(result, 7);
     resetSubsearchMaxOut();
   }
 
   @Test
-  public void testSubsearchMaxOutZero2() throws IOException {
+  public void testCorrelatedSubsearchMaxOutZeroMeansUnlimited() throws IOException {
     setSubsearchMaxOut(0);
-    JSONObject result =
-        executeQuery(
-            String.format(
-                "source = %s"
-                    + "| where exists ["
-                    + "    source = %s | where id = uid"
-                    + "  ]"
-                    + "| sort  - salary"
-                    + "| fields id, name, salary",
-                TEST_INDEX_WORKER, TEST_INDEX_WORK_INFORMATION));
-    verifyNumOfRows(result, 0);
-    result =
-        executeQuery(
-            String.format(
-                "source = %s"
-                    + "| where not exists ["
-                    + "    source = %s | where id = uid"
-                    + "  ]"
-                    + "| sort  - salary"
-                    + "| fields id, name, salary",
-                TEST_INDEX_WORKER, TEST_INDEX_WORK_INFORMATION));
-    verifyNumOfRows(result, 7);
-    resetSubsearchMaxOut();
-  }
-
-  @Test
-  public void testSubsearchMaxOutUnlimited() throws IOException {
-    setSubsearchMaxOut(-1);
     JSONObject result =
         executeQuery(
             String.format(
@@ -448,6 +408,17 @@ public class CalcitePPLExistsSubqueryIT extends PPLIntegTestCase {
                     + "| fields id, name, salary",
                 TEST_INDEX_WORKER, TEST_INDEX_WORK_INFORMATION));
     verifyNumOfRows(result, 5);
+    result =
+        executeQuery(
+            String.format(
+                "source = %s"
+                    + "| where not exists ["
+                    + "    source = %s | where id = uid"
+                    + "  ]"
+                    + "| sort  - salary"
+                    + "| fields id, name, salary",
+                TEST_INDEX_WORKER, TEST_INDEX_WORK_INFORMATION));
+    verifyNumOfRows(result, 2);
     resetSubsearchMaxOut();
   }
 }

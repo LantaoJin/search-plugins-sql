@@ -421,4 +421,21 @@ public class CalcitePPLExistsSubqueryIT extends PPLIntegTestCase {
     verifyNumOfRows(result, 2);
     resetSubsearchMaxOut();
   }
+
+  @Test
+  public void testSubsearchMaxOutNegativeMeansUnlimited() throws IOException {
+    setSubsearchMaxOut(-1);
+    JSONObject result =
+        executeQuery(
+            String.format(
+                "source = %s"
+                    + "| where exists ["
+                    + "    source = %s | where id = uid"
+                    + "  ]"
+                    + "| sort  - salary"
+                    + "| fields id, name, salary",
+                TEST_INDEX_WORKER, TEST_INDEX_WORK_INFORMATION));
+    verifyNumOfRows(result, 5);
+    resetSubsearchMaxOut();
+  }
 }

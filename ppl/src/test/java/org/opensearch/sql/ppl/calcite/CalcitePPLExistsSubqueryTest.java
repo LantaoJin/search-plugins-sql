@@ -757,4 +757,29 @@ public class CalcitePPLExistsSubqueryTest extends CalcitePPLAbstractTest {
             + "ORDER BY `EMPNO` DESC";
     verifyPPLToSparkSQL(root, expectedSparkSql);
   }
+
+  @Test
+  public void testSubsearchMaxOutNegativeMeansUnlimited() {
+    doReturn(-1).when(settings).getSettingValue(Settings.Key.PPL_SUBSEARCH_MAXOUT);
+    String ppl =
+        """
+        source=EMP
+        | where exists [
+            source=SALGRADE
+            | where EMP.SAL = HISAL and LOSAL > 1000.0
+          ]
+        | sort - EMPNO | fields EMPNO, ENAME
+        """;
+    RelNode root = getRelNode(ppl);
+    String expectedLogical =
+        ""
+            + "LogicalProject(EMPNO=[$0], ENAME=[$1])\n"
+            + "  LogicalSort(sort0=[$0], dir0=[DESC-nulls-last])\n"
+            + "    LogicalFilter(condition=[EXISTS({\n"
+            + "LogicalFilter(condition=[AND(=($cor0.SAL, $2), >($1, 1000.0:DECIMAL(5, 1)))])\n"
+            + "  LogicalTableScan(table=[[scott, SALGRADE]])\n"
+            + "})], variablesSet=[[$cor0]])\n"
+            + "      LogicalTableScan(table=[[scott, EMP]])\n";
+    verifyLogical(root, expectedLogical);
+  }
 }

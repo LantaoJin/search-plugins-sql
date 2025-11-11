@@ -59,11 +59,13 @@ dependencies {
     api project(':common')
     api project(':core')
     api project(':protocol')
+    implementation project(':native')
 
     testImplementation group: 'junit', name: 'junit', version: '4.13.2'
     testImplementation group: 'org.hamcrest', name: 'hamcrest-library', version: "${hamcrest_version}"
     testImplementation group: 'org.mockito', name: 'mockito-core', version: "${mockito_version}"
     testImplementation group: 'org.apache.calcite', name: 'calcite-testkit', version: '1.41.0'
+    testImplementation group: 'com.google.protobuf', name: 'protobuf-java-util', version: '3.25.5'
     testImplementation(testFixtures(project(":core")))
 }
 
@@ -91,6 +93,12 @@ test {
         events "passed", "skipped", "failed"
         exceptionFormat "full"
     }
+    
+    // Add native library path for tests
+    systemProperty 'java.library.path', "${rootProject.projectDir}/native/build/libs"
+    
+    // Ensure native library is built before running tests
+    dependsOn ':native:buildCpp'
 }
 
 jacocoTestReport {

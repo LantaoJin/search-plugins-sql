@@ -58,6 +58,13 @@ public class FormatTest {
   }
 
   @Test
+  void substrait() {
+    Optional<Format> format = Format.ofExplain("substrait");
+    assertTrue(format.isPresent());
+    assertEquals(Format.SUBSTRAIT, format.get());
+  }
+
+  @Test
   void defaultExplainFormat() {
     Optional<Format> format = Format.ofExplain("");
     assertTrue(format.isPresent());

@@ -24,7 +24,8 @@ public enum Format {
   EXTENDED("extended"),
   COST("cost"),
   /** Returns explain output in yaml format */
-  YAML("yaml");
+  YAML("yaml"),
+  SUBSTRAIT("substrait");
 
   @Getter private final String formatName;
 
@@ -47,6 +48,7 @@ public enum Format {
     builder.put(EXTENDED.formatName, EXTENDED);
     builder.put(COST.formatName, COST);
     builder.put(YAML.formatName, YAML);
+    builder.put(SUBSTRAIT.formatName, SUBSTRAIT);
     EXPLAIN_FORMATS = builder.build();
   }
 

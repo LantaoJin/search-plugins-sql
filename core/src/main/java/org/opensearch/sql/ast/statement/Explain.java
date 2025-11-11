@@ -41,7 +41,9 @@ public class Explain extends Statement {
     EXTENDED,
     COST,
     /** Formats explain output in yaml format. */
-    YAML
+    YAML,
+    /** Explain output to substrait plan. */
+    SUBSTRAIT
   }
 
   public static ExplainFormat format(String format) {

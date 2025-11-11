@@ -133,7 +133,8 @@ public class TransportPPLQueryAction
       @Override
       public void onResponse(ExecutionEngine.ExplainResponse response) {
         Optional<Format> isYamlFormat =
-            Format.ofExplain(request.getFormat()).filter(format -> format.equals(Format.YAML));
+            Format.ofExplain(request.getFormat())
+                .filter(format -> format.equals(Format.YAML) || format.equals(Format.SUBSTRAIT));
         ResponseFormatter<ExecutionEngine.ExplainResponse> formatter;
         if (isYamlFormat.isPresent()) {
           formatter =

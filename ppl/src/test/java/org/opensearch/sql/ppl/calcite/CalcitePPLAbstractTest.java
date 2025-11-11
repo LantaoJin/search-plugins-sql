@@ -11,7 +11,9 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.opensearch.sql.NativeEngine.printSubstraitPlan;
 import static org.opensearch.sql.executor.QueryType.PPL;
+import static org.opensearch.sql.substrait.SubstraitConverter.*;
 
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -147,6 +149,13 @@ public class CalcitePPLAbstractTest {
   /** Verify the logical plan of the given RelNode */
   public void verifyLogical(RelNode rel, String expectedLogical) {
     assertThat(rel, hasTree(expectedLogical));
+  }
+
+  public void verifySubstrait(RelNode rel) {
+    io.substrait.proto.Plan plan = execute(rel);
+    System.out.println(plan.toString());
+    String cppJson = printSubstraitPlan(plan);
+    System.out.println(cppJson);
   }
 
   /** Execute and verify the result of the given RelNode */

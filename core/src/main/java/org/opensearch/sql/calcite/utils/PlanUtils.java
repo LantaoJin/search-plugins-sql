@@ -25,9 +25,11 @@ import org.apache.calcite.plan.RelOptTable;
 import org.apache.calcite.rel.RelHomogeneousShuttle;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelShuttle;
+import org.apache.calcite.rel.RelVisitor;
 import org.apache.calcite.rel.core.Project;
 import org.apache.calcite.rel.core.Sort;
 import org.apache.calcite.rel.core.TableScan;
+import org.apache.calcite.rel.logical.LogicalAggregate;
 import org.apache.calcite.rel.logical.LogicalProject;
 import org.apache.calcite.rel.logical.LogicalSort;
 import org.apache.calcite.rel.type.RelDataType;
@@ -509,6 +511,24 @@ public interface PlanUtils {
 
   static boolean containsRexOver(LogicalProject project) {
     return project.getProjects().stream().anyMatch(RexOver::containsOver);
+  }
+
+  static boolean containsAggregate(RelNode node) {
+    try {
+      (new RelVisitor() {
+            public void visit(RelNode node, int ordinal, RelNode parent) {
+              if (node instanceof LogicalAggregate) {
+                throw Util.FoundOne.NULL;
+              } else {
+                super.visit(node, ordinal, parent);
+              }
+            }
+          })
+          .go(node);
+      return false;
+    } catch (Util.FoundOne var3) {
+      return true;
+    }
   }
 
   /**

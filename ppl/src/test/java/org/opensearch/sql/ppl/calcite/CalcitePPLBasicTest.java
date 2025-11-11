@@ -60,6 +60,8 @@ public class CalcitePPLBasicTest extends CalcitePPLAbstractTest {
             + "FROM `scott`.`products_temporal`\n"
             + "WHERE `SUPPLIER` > 0 AND `ID` = '1000'";
     verifyPPLToSparkSQL(root, expectedSparkSql);
+
+    verifySubstrait(root);
   }
 
   @Test

@@ -37,6 +37,8 @@ public abstract class PPLIntegTestCase extends SQLIntegTestCase {
   private static final String EXTENDED_EXPLAIN_API_ENDPOINT =
       "/_plugins/_ppl/_explain?format=extended";
   private static final String YAML_EXPLAIN_API_ENDPOINT = "/_plugins/_ppl/_explain?format=yaml";
+  private static final String SUBSTRAIT_EXPLAIN_API_ENDPOINT =
+      "/_plugins/_ppl/_explain?format=substrait";
   private static final Logger LOG = LogManager.getLogger();
   @Rule public final RetryProcessor retryProcessor = new RetryProcessor();
   public static final Integer DEFAULT_SUBSEARCH_MAXOUT = 10000;
@@ -65,6 +67,14 @@ public abstract class PPLIntegTestCase extends SQLIntegTestCase {
 
   protected String explainQueryYaml(String query) throws IOException {
     Response response = client().performRequest(buildRequest(query, YAML_EXPLAIN_API_ENDPOINT));
+    Assert.assertEquals(200, response.getStatusLine().getStatusCode());
+    String responseBody = getResponseBody(response, true);
+    return responseBody;
+  }
+
+  protected String explainQuerySubtrait(String query) throws IOException {
+    Response response =
+        client().performRequest(buildRequest(query, SUBSTRAIT_EXPLAIN_API_ENDPOINT));
     Assert.assertEquals(200, response.getStatusLine().getStatusCode());
     String responseBody = getResponseBody(response, true);
     return responseBody;

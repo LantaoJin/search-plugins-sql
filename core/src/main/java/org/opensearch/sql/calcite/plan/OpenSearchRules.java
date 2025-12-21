@@ -7,6 +7,7 @@ package org.opensearch.sql.calcite.plan;
 
 import com.google.common.collect.ImmutableList;
 import java.util.List;
+import org.apache.calcite.adapter.enumerable.EnumerableRules;
 import org.apache.calcite.plan.RelOptRule;
 
 public class OpenSearchRules {
@@ -16,7 +17,8 @@ public class OpenSearchRules {
       PPLAggGroupMergeRule.Config.GROUP_MERGE.toRule();
 
   public static final List<RelOptRule> OPEN_SEARCH_OPT_RULES =
-      ImmutableList.of(AGGREGATE_CONVERT_RULE, AGG_GROUP_MERGE_RULE);
+      ImmutableList.of(
+          AGGREGATE_CONVERT_RULE, AGG_GROUP_MERGE_RULE, EnumerableRules.ENUMERABLE_LIMIT_SORT_RULE);
 
   // prevent instantiation
   private OpenSearchRules() {}

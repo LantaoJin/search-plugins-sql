@@ -391,42 +391,46 @@ public class CalciteLogicalIndexScan extends AbstractCalciteIndexScan {
     return null;
   }
 
-  public AbstractRelNode pushDownLimit(LogicalSort sort, Integer limit, Integer offset) {
+  public AbstractRelNode pushDownLimit(
+      LogicalSort sort, Integer limitObject, Integer offsetObject) {
+    if (limitObject == null) return null;
+    int fetch = limitObject.intValue();
+    int offset = Objects.requireNonNullElse(offsetObject, 0);
     try {
       if (pushDownContext.isAggregatePushed()) {
         // Push down the limit into the aggregation bucket in advance to detect whether the limit
         // can update the aggregation builder
         boolean canUpdate =
-            pushDownContext.getAggPushDownAction().pushDownLimitIntoBucketSize(limit + offset);
+            pushDownContext.getAggPushDownAction().pushDownLimitIntoBucketSize(fetch + offset);
         if (!canUpdate && offset > 0) return null;
         CalciteLogicalIndexScan newScan = this.copyWithNewSchema(getRowType());
         if (canUpdate) {
           newScan
               .pushDownContext
               .getAggPushDownAction()
-              .pushDownLimitIntoBucketSize(limit + offset);
+              .pushDownLimitIntoBucketSize(fetch + offset);
         }
         AbstractAction action;
         if (pushDownContext.getAggPushDownAction().isCompositeAggregation()) {
           action =
               (OSRequestBuilderAction)
-                  requestBuilder -> requestBuilder.pushDownLimitToRequestTotal(limit, offset);
+                  requestBuilder -> requestBuilder.pushDownLimitToRequestTotal(fetch, offset);
         } else {
           action = (AggregationBuilderAction) aggAction -> {};
         }
-        newScan.pushDownContext.add(PushDownType.LIMIT, new LimitDigest(limit, offset), action);
+        newScan.pushDownContext.add(PushDownType.LIMIT, new LimitDigest(fetch, offset), action);
         return offset > 0 ? sort.copy(sort.getTraitSet(), List.of(newScan)) : newScan;
       } else {
         CalciteLogicalIndexScan newScan = this.copyWithNewSchema(getRowType());
         newScan.pushDownContext.add(
             PushDownType.LIMIT,
-            new LimitDigest(limit, offset),
-            (OSRequestBuilderAction) requestBuilder -> requestBuilder.pushDownLimit(limit, offset));
+            new LimitDigest(fetch, offset),
+            (OSRequestBuilderAction) requestBuilder -> requestBuilder.pushDownLimit(fetch, offset));
         return newScan;
       }
     } catch (Exception e) {
       if (LOG.isDebugEnabled()) {
-        LOG.debug("Cannot pushdown limit {} with offset {}", limit, offset, e);
+        LOG.debug("Cannot pushdown limit {} with offset {}", fetch, offset, e);
       }
     }
     return null;

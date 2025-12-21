@@ -399,7 +399,7 @@ public class AggPushDownAction implements OSRequestBuilderAction {
    * Check if the limit can be pushed down into aggregation bucket when the limit size is less than
    * bucket number.
    */
-  public boolean pushDownLimitIntoBucketSize(Integer size) {
+  public boolean pushDownLimitIntoBucketSize(int size) {
     // aggregationBuilder.getLeft() could be empty when count agg optimization works
     if (builderAndParser.getLeft().isEmpty()) return false;
     AggregationBuilder builder = builderAndParser.getLeft().getFirst();

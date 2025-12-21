@@ -33,7 +33,6 @@ import org.apache.calcite.rel.hint.RelHint;
 import org.apache.calcite.rel.logical.LogicalAggregate;
 import org.apache.calcite.rel.logical.LogicalFilter;
 import org.apache.calcite.rel.logical.LogicalProject;
-import org.apache.calcite.rel.logical.LogicalSort;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rex.RexCall;
 import org.apache.calcite.rex.RexCorrelVariable;
@@ -518,24 +517,21 @@ public interface PlanUtils {
     return project.getNamedProjects().stream().allMatch(rexSet::add);
   }
 
-  /**
-   * The LogicalSort is a LIMIT that should be pushed down when its fetch field is not null and its
-   * collation is empty. For example: <code>sort name | head 5</code> should not be pushed down
-   * because it has a field collation.
-   *
-   * @param sort The LogicalSort to check.
-   * @return True if the LogicalSort is a LIMIT, false otherwise.
-   */
-  static boolean isLogicalSortLimit(LogicalSort sort) {
-    return sort.fetch != null;
-  }
-
   static boolean containsRexCall(Project project) {
     return project.getProjects().stream().anyMatch(p -> p instanceof RexCall);
   }
 
-  static boolean sortByFieldsOnly(Sort sort) {
+  /**
+   * True if the Sort has no limit, false otherwise. Note, the isSortOnly() is not the antonym of
+   * isLimitOnly().
+   */
+  static boolean isSortOnly(Sort sort) {
     return !sort.getCollation().getFieldCollations().isEmpty() && sort.fetch == null;
+  }
+
+  /** True if the Sort is a LIMIT, false otherwise. */
+  static boolean isLimitOnly(Sort sort) {
+    return sort.getCollation().getFieldCollations().isEmpty() && sort.fetch != null;
   }
 
   /**

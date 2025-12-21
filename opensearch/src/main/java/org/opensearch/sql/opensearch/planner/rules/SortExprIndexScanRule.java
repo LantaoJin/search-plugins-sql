@@ -105,7 +105,7 @@ public class SortExprIndexScanRule extends InterruptibleRelRule<SortExprIndexSca
     // EnumerableSort won't have limit or offset
     Integer limitValue = LimitIndexScanRule.extractLimitValue(sort.fetch);
     Integer offsetValue = LimitIndexScanRule.extractOffsetValue(sort.offset);
-    if (newScan instanceof CalciteLogicalIndexScan && limitValue != null && offsetValue != null) {
+    if (newScan instanceof CalciteLogicalIndexScan && limitValue != null) {
       newScan =
           (CalciteLogicalIndexScan)
               ((CalciteLogicalIndexScan) newScan)
@@ -249,7 +249,7 @@ public class SortExprIndexScanRule extends InterruptibleRelRule<SortExprIndexSca
                     b0.operand(Sort.class)
                         // Pure limit pushdown should be covered by SortProjectTransposeRule and
                         // OpenSearchLimitIndexScanRule
-                        .predicate(sort -> !sort.collation.getFieldCollations().isEmpty())
+                        .predicate(Predicate.not(PlanUtils::isLimitOnly))
                         .oneInput(
                             b1 ->
                                 b1.operand(Project.class)

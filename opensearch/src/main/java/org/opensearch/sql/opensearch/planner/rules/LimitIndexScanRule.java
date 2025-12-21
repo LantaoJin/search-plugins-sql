@@ -41,7 +41,7 @@ public class LimitIndexScanRule extends InterruptibleRelRule<LimitIndexScanRule.
 
     Integer limitValue = extractLimitValue(sort.fetch);
     Integer offsetValue = extractOffsetValue(sort.offset);
-    if (limitValue != null && offsetValue != null) {
+    if (limitValue != null) {
       AbstractRelNode newOperator = scan.pushDownLimit(sort, limitValue, offsetValue);
       if (newOperator != null) {
         call.transformTo(newOperator);
@@ -89,7 +89,7 @@ public class LimitIndexScanRule extends InterruptibleRelRule<LimitIndexScanRule.
             .withOperandSupplier(
                 b0 ->
                     b0.operand(LogicalSort.class)
-                        .predicate(PlanUtils::isLogicalSortLimit)
+                        .predicate(PlanUtils::isLimitOnly)
                         .oneInput(b1 -> b1.operand(CalciteLogicalIndexScan.class).noInputs()));
 
     @Override

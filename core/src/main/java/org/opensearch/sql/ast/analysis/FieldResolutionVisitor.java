@@ -44,6 +44,7 @@ import org.opensearch.sql.ast.tree.Head;
 import org.opensearch.sql.ast.tree.Join;
 import org.opensearch.sql.ast.tree.Lookup;
 import org.opensearch.sql.ast.tree.Multisearch;
+import org.opensearch.sql.ast.tree.MvCombine;
 import org.opensearch.sql.ast.tree.Parse;
 import org.opensearch.sql.ast.tree.Patterns;
 import org.opensearch.sql.ast.tree.Project;
@@ -75,6 +76,8 @@ import org.opensearch.sql.expression.parse.RegexCommonUtils;
  * support in the future.
  */
 public class FieldResolutionVisitor extends AbstractNodeVisitor<Node, FieldResolutionContext> {
+
+  private static final String ALL_FIELDS = "*";
 
   /**
    * Analyzes PPL query plan to determine required fields at each node.
@@ -613,6 +616,22 @@ public class FieldResolutionVisitor extends AbstractNodeVisitor<Node, FieldResol
   public Node visitExpand(Expand node, FieldResolutionContext context) {
     Set<String> expandFields = extractFieldsFromExpression(node.getField());
     context.pushRequirements(context.getCurrentRequirements().or(expandFields));
+    visitChildren(node, context);
+    context.popRequirements();
+    return node;
+  }
+
+  @Override
+  public Node visitMvCombine(MvCombine node, FieldResolutionContext context) {
+    Set<String> mvCombineFields = extractFieldsFromExpression(node.getField());
+
+    FieldResolutionResult current = context.getCurrentRequirements();
+
+    Set<String> regularFields = new HashSet<>(current.getRegularFields());
+    regularFields.addAll(mvCombineFields);
+
+    context.pushRequirements(new FieldResolutionResult(regularFields, Set.of(ALL_FIELDS)));
+
     visitChildren(node, context);
     context.popRequirements();
     return node;

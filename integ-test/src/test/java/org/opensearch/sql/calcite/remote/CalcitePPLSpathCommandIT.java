@@ -169,4 +169,18 @@ public class CalcitePPLSpathCommandIT extends PPLIntegTestCase {
         result, schema("key", "string"), schema("left", "string"), schema("right", "string"));
     verifyDataRows(result, rows("k1", "l", "r1"));
   }
+
+  @Test
+  public void testSpathWithMvCombine() throws IOException {
+    JSONObject result =
+        executeQuery(
+            "source=test_json | where category='simple' "
+                + "| spath input=userData "
+                + "| fields a, b, c "
+                + "| mvcombine c");
+
+    verifySchema(result, schema("a", "string"), schema("b", "string"), schema("c", "array"));
+
+    verifyDataRows(result, rows("1", "2", new String[] {"3", "3"}));
+  }
 }

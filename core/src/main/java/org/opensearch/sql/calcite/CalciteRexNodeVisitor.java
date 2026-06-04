@@ -18,6 +18,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import javax.annotation.Nullable;
@@ -84,11 +85,13 @@ import org.opensearch.sql.calcite.utils.OpenSearchTypeFactory;
 import org.opensearch.sql.calcite.utils.PlanUtils;
 import org.opensearch.sql.calcite.utils.SubsearchUtils;
 import org.opensearch.sql.common.utils.StringUtils;
+import org.opensearch.sql.data.type.ExprCoreType;
 import org.opensearch.sql.data.type.ExprType;
 import org.opensearch.sql.exception.CalciteUnsupportedException;
 import org.opensearch.sql.exception.ExpressionEvaluationException;
 import org.opensearch.sql.exception.SemanticCheckException;
 import org.opensearch.sql.expression.function.BuiltinFunctionName;
+import org.opensearch.sql.expression.function.CoercionUtils;
 import org.opensearch.sql.expression.function.PPLFuncImpTable;
 
 @RequiredArgsConstructor
@@ -264,6 +267,17 @@ public class CalciteRexNodeVisitor extends AbstractNodeVisitor<RexNode, CalciteP
     RexNode lowerBound = analyze(node.getLowerBound(), context);
     RexNode upperBound = analyze(node.getUpperBound(), context);
     RelDataType commonType = context.rexBuilder.commonType(value, lowerBound, upperBound);
+    if (commonType == null) {
+      // leastRestrictive() returns null for distinct temporal UDTs (e.g. a TIMESTAMP field with
+      // DATE bounds: `where ts between date('...') and date('...')`), even though DATE/TIME both
+      // widen to TIMESTAMP in the type graph. Comparisons coerce these via CoercionUtils; mirror
+      // that here, but scoped to temporal types only so genuinely incompatible mixes (e.g.
+      // `age between '35' and 38.5`) still raise SemanticCheckException.
+      List<RexNode> widened = widenTemporalBetweenOperands(context, value, lowerBound, upperBound);
+      if (widened != null) {
+        return context.relBuilder.between(widened.get(0), widened.get(1), widened.get(2));
+      }
+    }
     if (commonType != null) {
       lowerBound = context.rexBuilder.makeCast(commonType, lowerBound);
       upperBound = context.rexBuilder.makeCast(commonType, upperBound);
@@ -277,6 +291,29 @@ public class CalciteRexNodeVisitor extends AbstractNodeVisitor<RexNode, CalciteP
     }
     return context.relBuilder.between(value, lowerBound, upperBound);
   }
+
+  /**
+   * Widens BETWEEN's three operands to a common temporal type when, and only when, every operand is
+   * a temporal type (DATE / TIME / TIMESTAMP). Returns {@code null} otherwise so non-temporal
+   * incompatible mixes still fail the type check. The widening itself reuses {@link
+   * CoercionUtils#widenArguments} — the same path comparison operators take — which resolves DATE /
+   * TIME to TIMESTAMP via the shared widening graph.
+   */
+  private static @Nullable List<RexNode> widenTemporalBetweenOperands(
+      CalcitePlanContext context, RexNode value, RexNode lowerBound, RexNode upperBound) {
+    List<RexNode> operands = List.of(value, lowerBound, upperBound);
+    boolean allTemporal =
+        operands.stream()
+            .map(node -> OpenSearchTypeFactory.convertRelDataTypeToExprType(node.getType()))
+            .allMatch(TEMPORAL_TYPES::contains);
+    if (!allTemporal) {
+      return null;
+    }
+    return CoercionUtils.widenArguments(context.rexBuilder, operands);
+  }
+
+  private static final Set<ExprType> TEMPORAL_TYPES =
+      Set.of(ExprCoreType.DATE, ExprCoreType.TIME, ExprCoreType.TIMESTAMP);
 
   @Override
   public RexNode visitEqualTo(EqualTo node, CalcitePlanContext context) {

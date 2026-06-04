@@ -500,7 +500,11 @@ public class CalcitePPLBasicIT extends PPLIntegTestCase {
     verifyDataRows(actual, rows("Hattie", 36), rows("Elinor", 36));
   }
 
+  @Test
   public void testDateBetween() throws IOException {
+    // birthdate is a TIMESTAMP field; the bounds are DATE literals. leastRestrictive() has no
+    // common type for the distinct TIMESTAMP/DATE UDTs, so BETWEEN must widen the temporal
+    // operands to TIMESTAMP (mirroring how comparison operators coerce) rather than rejecting.
     JSONObject actual =
         executeQuery(
             String.format(
